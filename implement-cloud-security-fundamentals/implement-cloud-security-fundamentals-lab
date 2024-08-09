@@ -1,23 +1,22 @@
 Implement Cloud Security Fundamentals on Google Cloud Challenge Lab
-This guide provides a solution for the "Implement Cloud Security Fundamentals on Google Cloud" Challenge Lab. The goal is to deploy and secure a Kubernetes Engine private cluster according to specific security standards.
+Overview
+This lab is part of GCP - Google Cloud Professional Cloud Network Engineer course. Below, I describe the steps I took to complete the "Implement Cloud Security Fundamentals on Google Cloud" Challenge Lab.
 
 Challenge Scenario
-As a junior member of the security team at Jooli Inc., you are tasked with deploying, configuring, and testing a new Kubernetes Engine cluster that complies with the organization's security standards. This includes:
+I was tasked with setting up a secure Kubernetes Engine private cluster for Jooli Inc.’s Orca development team. The key objectives were:
 
-Deploying the cluster using a dedicated service account with the least privileges.
-Creating the cluster as a Kubernetes Engine private cluster with no public endpoint.
-Restricting access to the cluster master to a specific IP address (Orca group's management jumphost).
-Binding specific IAM roles to the service account and creating a custom role for Google Cloud Storage access.
-Solution Outline
-The solution involves several key steps:
+Create a Service Account with Minimal Permissions:
+I needed to ensure the cluster was deployed using a service account that only had the necessary permissions (least privilege). This is important for security because it limits the potential damage if the account is compromised.
 
-Set up environment variables.
-Create and bind a service account with minimal required permissions.
-Deploy the Kubernetes Engine private cluster.
-Verify the deployment and security settings.
-Step-by-Step Commands
+Deploy a Private Kubernetes Cluster:
+The cluster had to be private, meaning it wouldn't have a public endpoint accessible over the internet. Instead, access was restricted to a specific IP address used by the Orca team’s management jumphost.
+
+Assign Custom IAM Roles:
+The service account needed additional permissions to manage objects in Google Cloud Storage. I had to create a custom IAM role for this and assign it to the service account.
+
+Step-by-Step Solution
 1. Set Up Environment Variables
-First, set up your environment variables in CloudShell. Replace placeholders with actual values:
+First, I set up environment variables in CloudShell to make the following commands easier to execute:
 
 bash
 Copy code
@@ -25,23 +24,71 @@ export CUSTOM_ROLE="GCSObjectManager"
 export S_A="orca-k8s-sa"
 export CLUSTER="orca-private-cluster"
 export ZONE="us-central1-a"
+These variables store the names of the custom role, service account, cluster, and the zone where the cluster will be deployed.
 
+2. Create and Assign a Service Account
+Next, I created a service account named orca-k8s-sa and assigned it the necessary roles for monitoring and logging:
 
-5. Testing and Verification
-Finally, verify the deployment by running the following commands:
+bash
+Copy code
+gcloud iam service-accounts create $S_A --display-name "Orca K8s Service Account"
+
+gcloud projects add-iam-policy-binding [PROJECT_ID] \
+  --member="serviceAccount:$S_A@[PROJECT_ID].iam.gserviceaccount.com" \
+  --role="roles/monitoring.viewer"
+
+gcloud projects add-iam-policy-binding [PROJECT_ID] \
+  --member="serviceAccount:$S_A@[PROJECT_ID].iam.gserviceaccount.com" \
+  --role="roles/monitoring.metricWriter"
+
+gcloud projects add-iam-policy-binding [PROJECT_ID] \
+  --member="serviceAccount:$S_A@[PROJECT_ID].iam.gserviceaccount.com" \
+  --role="roles/logging.logWriter"
+These roles ensure the service account can perform basic monitoring and logging tasks.
+
+3. Create a Custom IAM Role for Storage Access
+I needed to allow the service account to manage objects in Google Cloud Storage, so I created a custom role with the required permissions:
+
+bash
+Copy code
+gcloud iam roles create $CUSTOM_ROLE --project=[PROJECT_ID] \
+  --title="GCS Object Manager" \
+  --description="Role to manage GCS objects" \
+  --permissions="storage.objects.create,storage.objects.update"
+
+gcloud projects add-iam-policy-binding [PROJECT_ID] \
+  --member="serviceAccount:$S_A@[PROJECT_ID].iam.gserviceaccount.com" \
+  --role="projects/[PROJECT_ID]/roles/$CUSTOM_ROLE"
+4. Deploy the Kubernetes Engine Private Cluster
+I then deployed a private Kubernetes Engine cluster with the public endpoint disabled and access restricted to the Orca management jumphost’s IP address:
+
+bash
+Copy code
+gcloud container clusters create $CLUSTER \
+  --zone $ZONE \
+  --no-enable-public-endpoint \
+  --enable-private-nodes \
+  --master-authorized-networks [Jumphost-IP-Address]/32 \
+  --network "orca-build-vpc" \
+  --subnetwork "orca-build-subnet" \
+  --service-account "$S_A@[PROJECT_ID].iam.gserviceaccount.com"
+This configuration ensures that the cluster is secure and only accessible from the designated IP address.
+
+5. Verify the Deployment
+Finally, I verified that the cluster was successfully deployed and that it was functioning correctly:
 
 bash
 Copy code
 gcloud container clusters get-credentials $CLUSTER --zone $ZONE
 
 kubectl get nodes
-Deploy a simple test application to ensure the cluster is functioning as expected:
+I also deployed a simple Nginx application to test the cluster’s functionality:
 
 bash
 Copy code
 kubectl create deployment nginx --image=nginx
 kubectl expose deployment nginx --port=80 --type=LoadBalancer
-Ensure the public endpoint is inaccessible and only the specified IP address can reach the cluster master.
+This confirmed that the cluster was working as expected and that the security settings were correctly applied.
 
 Conclusion
-This solution demonstrates how to securely deploy a Kubernetes Engine private cluster in Google Cloud by following the security standards of Jooli Inc. The automated script simplifies the process, ensuring that the cluster is configured with the least privilege and restricted access.
+Completing this lab allowed me to demonstrate my ability to secure a Kubernetes Engine cluster on Google Cloud, applying both best practices in security and practical skills in cloud infrastructure management. This lab is part of my portfolio to show employers that I have hands-on experience with Google Cloud technologies and can handle complex security configurations.
